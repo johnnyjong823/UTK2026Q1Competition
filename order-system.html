@@ -565,6 +565,18 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <!-- ============================================ -->
+<!-- PAGE: Loading (跟單者進入時的載入畫面) -->
+<!-- ============================================ -->
+<div class="page" id="pageLoading">
+  <div class="join-page">
+    <img src="utk_logo_64x64.png" class="join-logo" alt="UTK">
+    <div class="join-store-name">UTK 揪團點餐</div>
+    <div class="join-title" style="font-size:16px;">⏳ 載入訂單中...</div>
+    <div class="join-info" style="color:var(--gray-500);">請稍候</div>
+  </div>
+</div>
+
+<!-- ============================================ -->
 <!-- PAGE: Home (Entry) -->
 <!-- ============================================ -->
 <div class="page active" id="pageHome">
@@ -2467,7 +2479,13 @@ async function refreshOrders() {
   }
 }
 
-renderHome();
+// 如果 URL 有 ?code= 參數，先顯示載入頁（不要閃到首頁）
+const _urlHasCode = new URLSearchParams(window.location.search).has('code');
+if (_urlHasCode) {
+  goPage('pageLoading');
+} else {
+  renderHome();
+}
 
 // 初始化順序：LIFF → 載入店家 → 檢查 URL 代碼
 (async function init() {
