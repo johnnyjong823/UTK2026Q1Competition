@@ -834,7 +834,10 @@
     </div>
 
     <div class="section">
-      <div class="section-title">📋 所有人的訂單</div>
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+        📋 所有人的訂單
+        <button class="btn btn-outline btn-sm" onclick="refreshOrders()" style="font-size:12px;padding:4px 10px;">🔄 重新整理</button>
+      </div>
       <div id="allOrdersList"></div>
       <div class="empty-state" id="emptyAllOrders">
         <div class="icon">📭</div><div class="title">目前還沒有人點餐</div><div class="desc">成為第一個吧！</div>
@@ -1448,10 +1451,23 @@ function copyLink() {
   navigator.clipboard?.writeText(url).then(()=>toast('✅ 已複製連結'));
 }
 
-function previewOrder(goId) {
-  const go = groupOrders.find(g=>g.id===goId);
+async function previewOrder(goId) {
+  let go = groupOrders.find(g=>g.id===goId);
   if(!go) return;
-  currentUser = {id:'creator_'+genId(), name: go.creator, avatar:'👤'};
+
+  // 從 API 拉取最新訂單資料
+  if (apiReady && go.code) {
+    toast('⏳ 載入最新訂單...');
+    const apiOrder = await loadOrderFromAPI(go.code);
+    if (apiOrder && !apiOrder.error) {
+      go.orders = apiOrder.orders || [];
+      go.closed = apiOrder.closed;
+    }
+  }
+
+  if (!currentUser) {
+    currentUser = {id:'creator_'+genId(), name: go.creator, avatar:'👤'};
+  }
   currentGroupOrder = go;
   allOrders = go.orders || [];
   myCart = [];
@@ -2422,6 +2438,33 @@ function startAutoRefresh() {
       }
     }
   }, 10000); // Refresh every 10 seconds
+}
+
+// 手動重新整理訂單
+async function refreshOrders() {
+  if (!currentGroupOrder) return;
+  if (apiReady) {
+    toast('⏳ 更新中...');
+    const updated = await loadOrderFromAPI(currentGroupOrder.code);
+    if (updated && !updated.error) {
+      currentGroupOrder.orders = updated.orders || [];
+      currentGroupOrder.closed = updated.closed;
+      allOrders = currentGroupOrder.orders;
+      renderAllOrders();
+      if (updated.closed) {
+        $('btnSubmitOrder').disabled = true;
+        $('btnSubmitOrder').textContent = '🔒 已結單';
+        if(countdownInterval) clearInterval(countdownInterval);
+        $('countdownTimer').textContent = '已結單';
+        $('countdownBar').className = 'countdown-bar expired';
+      }
+      toast(`✅ 已更新，共 ${allOrders.length} 人點餐`);
+    } else {
+      toast('⚠️ 更新失敗','error');
+    }
+  } else {
+    renderAllOrders();
+  }
 }
 
 renderHome();
