@@ -2357,43 +2357,49 @@ async function checkUrlCode() {
 
   toast('⏳ 載入團購資料...');
 
-  // Try API first
+  // Find the order (API first, then local)
+  let go = null;
+
   if (apiReady) {
     const apiOrder = await loadOrderFromAPI(code);
-    if (apiOrder) {
-      // Need to ensure the store data is available
-      const store = stores.find(s => s.id === apiOrder.storeId);
-      if (store) {
-        currentGroupOrder = apiOrder;
-        if (currentUser) {
-          allOrders = apiOrder.orders || [];
-          myCart = [];
-          showOrderPage();
-        } else {
-          showLineLogin(apiOrder);
-        }
-        return;
-      }
+    if (apiOrder && !apiOrder.error) {
+      go = apiOrder;
+      // Add to local cache
+      if (!groupOrders.find(g => g.code === go.code)) groupOrders.push(go);
     }
   }
 
-  // Fallback: search local data
-  const go = groupOrders.find(g => g.code === code.toUpperCase());
-  if (go) {
-    currentGroupOrder = go;
-    if (currentUser) {
-      allOrders = go.orders || [];
-      myCart = [];
-      showOrderPage();
-    } else {
-      showLineLogin(go);
-    }
-  } else {
-    toast('找不到此團購代碼','error');
+  if (!go) {
+    go = groupOrders.find(g => g.code === code.toUpperCase());
   }
+
+  if (!go) {
+    toast('找不到此團購代碼','error');
+    return;
+  }
+
+  currentGroupOrder = go;
+
+  // If LIFF is ready and user is logged in, go directly to order page
+  if (currentUser) {
+    allOrders = go.orders || [];
+    myCart = [];
+    showOrderPage();
+    return;
+  }
+
+  // If LIFF is ready but not logged in, auto-trigger login
+  if (USE_LIFF && liffReady && !liff.isLoggedIn()) {
+    sessionStorage.setItem('pendingGroupCode', go.code);
+    liff.login();
+    return;
+  }
+
+  // Fallback: show LINE login page
+  showLineLogin(go);
 }
 
-// Auto-refresh order data periodically (for followers to see updates)
+// Auto-refreshorder data periodically (for followers to see updates)
 let refreshInterval = null;
 function startAutoRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
@@ -2419,11 +2425,16 @@ function startAutoRefresh() {
 }
 
 renderHome();
-if (USE_LIFF) initLiff();
-// Load stores from API and check URL
-loadStoresFromAPI().then(() => {
-  checkUrlCode();
-});
+
+// 初始化順序：LIFF → 載入店家 → 檢查 URL 代碼
+(async function init() {
+  // 1. LIFF 初始化（含自動登入恢復）
+  if (USE_LIFF) await initLiff();
+  // 2. 從 Google Sheets 載入店家
+  await loadStoresFromAPI();
+  // 3. 檢查 URL 是否有 ?code= 參數（跟單者點連結進來）
+  await checkUrlCode();
+})();
 </script>
 </body>
 </html>
