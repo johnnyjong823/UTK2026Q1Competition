@@ -1177,7 +1177,7 @@ async function initLiff() {
   try {
     await liff.init({ liffId: LIFF_ID });
     liffReady = true;
-    console.log('LIFF 初始化成功');
+    console.log('LIFF 初始化成功, isLoggedIn:', liff.isLoggedIn());
     // 如果已登入，自動取得使用者資訊
     if (liff.isLoggedIn()) {
       const profile = await liff.getProfile();
@@ -1187,6 +1187,41 @@ async function initLiff() {
         avatar: profile.pictureUrl || '🧑'
       };
       console.log('已登入:', currentUser.name);
+      toast(`👤 歡迎，${currentUser.name}！`);
+
+      // 恢復登入前的狀態
+      const savedAction = sessionStorage.getItem('pendingAction');
+      const savedStoreId = sessionStorage.getItem('pendingStoreId');
+      const savedCode = sessionStorage.getItem('pendingGroupCode');
+      sessionStorage.removeItem('pendingAction');
+      sessionStorage.removeItem('pendingStoreId');
+      sessionStorage.removeItem('pendingGroupCode');
+
+      if (savedAction === 'create') {
+        pendingAction = 'create';
+        if (savedStoreId) pendingStoreId = savedStoreId;
+        afterLogin();
+        return;
+      }
+      if (savedCode) {
+        // 重新載入團購資料
+        const apiOrder = await loadOrderFromAPI(savedCode);
+        if (apiOrder && !apiOrder.error) {
+          currentGroupOrder = apiOrder;
+          allOrders = apiOrder.orders || [];
+          myCart = [];
+          showOrderPage();
+          return;
+        }
+        const localOrder = groupOrders.find(g=>g.code===savedCode);
+        if (localOrder) {
+          currentGroupOrder = localOrder;
+          allOrders = localOrder.orders || [];
+          myCart = [];
+          showOrderPage();
+          return;
+        }
+      }
     }
     // 檢查 URL 是否含有團購代碼
     const urlParams = new URLSearchParams(window.location.search);
@@ -1196,6 +1231,8 @@ async function initLiff() {
     }
   } catch(e) {
     console.error('LIFF 初始化失敗:', e);
+    toast('⚠️ LINE 連線失敗，使用 Demo 模式', 'error');
+    liffReady = false;
   }
 }
 
